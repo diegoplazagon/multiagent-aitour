@@ -595,7 +595,8 @@ ChatCompletionAgent travelAgent =
         Name = "TravelAgent",
         Instructions = "You are an agent responsible for suggesting activities and creating an itinerary"
             + " for a given location with respect to the weather. Do not tell anything other than the travel"
-            + " plans. Your travel plans should not be more than 2 activities. Reply in the same language as the user.",
+            + " plans. Your travel plans should not be more than 2 activities. Use a function to retrieve online data."
+            + " Reply in the same language as the user.",
         Kernel = travelAgentKernel,
         Arguments = new KernelArguments(
         new OpenAIPromptExecutionSettings() 
