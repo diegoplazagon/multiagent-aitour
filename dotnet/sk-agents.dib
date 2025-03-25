@@ -1,0 +1,758 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"http","languageName":"HTTP"},{"name":"value"}]}}
+
+#!markdown
+
+# Semantic Kernel - AI Orchestration
+
+#!markdown
+
+## Install Packages and read configuration 
+
+#!csharp
+
+#r "nuget: Microsoft.SemanticKernel, *-*"
+#r "nuget: Microsoft.SemanticKernel.Plugins.Core,*-*"
+#r "nuget: Microsoft.SemanticKernel.Agents.Core, *-*"
+#r "nuget: Microsoft.SemanticKernel.Agents.Abstractions, *-*"
+#r "nuget: Microsoft.SemanticKernel.Agents.OpenAI, *-*"
+#r "nuget: Azure.AI.Projects, 1.0.0-beta.2"
+#r "nuget: Azure.Identity, 1.13.1"
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+
+var config = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText("settings.json"));
+
+string modelgpt = config["model-gpt"];
+string modelgptmini = config["model-gptmini"];
+string azureOpenAIEndpoint = config["endpoint"];
+string azureOpenAIKey = config["apikey"];
+
+Console.WriteLine("Configuration loaded successfully");
+
+#!markdown
+
+## Create an Agent based on the most simple Kernel
+
+#!csharp
+
+#pragma warning disable SKEXP0110, SKEXP0001
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.Plugins.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Kernel = Microsoft.SemanticKernel.Kernel;
+
+
+var builder = Kernel.CreateBuilder();
+builder.AddAzureOpenAIChatCompletion(
+            modelgpt, 
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-service");   
+
+Kernel weatherAgentKernel = builder.Build();
+
+ChatCompletionAgent weatherAgent =
+    new()
+    {
+        Name = "WeatherAgent",
+        Instructions = 
+            "You are an agent designed to query and retrieve information about the weather of a given location. "
+            + "If you have been asked to provide information about two distinguish locations then you need to get the " 
+            + " information appropriately. For now, just make it up, you do not have to call any service.",
+        Kernel = weatherAgentKernel
+    };
+
+
+ChatMessageContent message = new(AuthorRole.User, "Qué tiempo hace en Madrid hoy?");
+
+ChatHistory chat = [];
+chat.Add(message);
+
+await foreach (ChatMessageContent response in weatherAgent.InvokeAsync(chat))
+{
+    chat.Add(response);
+    Console.WriteLine(response);
+}
+
+#!markdown
+
+## Agent with a vitamined Kernel 💊💊
+
+#!csharp
+
+#pragma warning disable SKEXP0110, SKEXP0001, SKEXP0050
+
+Kernel foodAgentKernel = weatherAgentKernel.Clone();
+foodAgentKernel.Plugins.Clear();
+
+foodAgentKernel.ImportPluginFromType<TimePlugin>();
+foodAgentKernel.ImportPluginFromPromptDirectory("plugins/FoodPlugin");
+
+ChatCompletionAgent foodAgent =
+    new()
+    {
+        Name = "FoodAgent",
+        Instructions = "You are an agent responsible for suggestion of the food option depending upon"
+            + " time of the day. You need to make sure that you suggest something vegetarian."
+            + " Reply using the same language as the user.",
+        Kernel = foodAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+               //FunctionChoiceBehavior = FunctionChoiceBehavior.None()
+            })
+    };
+
+var prompt = "¿Qué podría comer ahora? Además, sea cual sea el plato que planees"
+            + " ¿puedes decirme también la receta?";
+
+ChatMessageContent message = new(AuthorRole.User, prompt);
+
+//ChatMessageContent message = new(AuthorRole.User, "¿Qué funciones vas a usar para resolver las siguientes preguntas?" + prompt);
+
+ChatHistory chat = [];
+chat.Add(message);
+
+await foreach (ChatMessageContent response in foodAgent.InvokeAsync(chat))
+{
+    chat.Add(response);
+    Console.WriteLine(response);
+}
+
+#!markdown
+
+## Multi-agent system: a team of agents
+
+#!markdown
+
+### Tour Planner 🧳✈️
+
+#!csharp
+
+#!import Plugins/BudgetAdvisor/BudgetAdvisor.cs
+
+#pragma warning disable SKEXP0110, SKEXP0001, SKEXP0050
+using System.Threading;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.Chat;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+var builder = Kernel.CreateBuilder();
+builder.AddAzureOpenAIChatCompletion(
+            modelgpt,
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-service");   
+builder.AddAzureOpenAIChatCompletion(
+            modelgptmini,
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-mini-service");   
+
+Kernel travelPlannerKernel = builder.Build();
+
+// Create the Travel Planner Agent
+var travelPlannerAgent = new ChatCompletionAgent
+{
+    Name = "TravelPlanner",
+    Instructions = "You create detailed travel itineraries based on user preferences, including flyes,"
+        + " accomodation and activities. You are very concise, to the point and does not waste time"
+        + " in explaining things in detail. At the end of each plan, you must calculate the total cost"
+        + " and make sure you provide reasoning of that total budget. Be realistic and calculate the plan"
+        + " without any budget constraints. Do not provide any feedback on the budget. Add possible changes"
+        + " to original plan if feedback from {{{travelFeedbackAgent.Name}}} is provided. You must always reply"
+        + " with a plan and never ask for user confirmation.",
+    Kernel = travelPlannerKernel,
+    Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings
+        {
+            ServiceId = "gpt-4o-mini-service",
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        }
+    )
+};
+
+Kernel budgetAdvisorKernel = travelPlannerKernel.Clone();
+budgetAdvisorKernel.ImportPluginFromObject(new BudgetAdvisor());
+
+// Create the Budget Advisor Agent
+var budgetAdvisorAgent = new ChatCompletionAgent
+{
+    Name = "BudgetAdvisor",
+    Instructions = "Your goal is to ensure that the user's travel plans are financially feasible and do not"
+        + " go beyond the budget. If is not below the budget, reject the plan with no. If it is below or equals the budget"
+        + " then approve it with a yes. Do not provide feedback. Just yes or no.",
+    Kernel = budgetAdvisorKernel,
+    Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings
+        {
+            ServiceId = "gpt-4o-mini-service",
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        }
+    )
+};
+
+
+Kernel travelFeedbackKernel = travelPlannerKernel.Clone();
+// Create the Budget Advisor Agent
+var travelFeedbackAgent = new ChatCompletionAgent
+{
+    Name = "FeedbackAdvisor",
+    Instructions = "You analyse travel plans, budgets constraints and suggest adjustments to fit within the total cost."
+        + " Provide a change in the plan for reducing costs by first reducing activities and ultimately reducing days."
+        + " Never increase the budget limit. These changes must be specific to ensure that after these considerations,"
+        + " the plan is feasible and does not go beyond the budget. Provide just feedback, never provide the final plan.",
+    Kernel = travelFeedbackKernel,
+    Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings
+        {
+            ServiceId = "gpt-4o-service",
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        }
+    )
+};
+
+// Create the AgentGroupChat with the agents and strategies
+var chat = new AgentGroupChat(travelPlannerAgent, budgetAdvisorAgent, travelFeedbackAgent)
+{
+    ExecutionSettings =
+            new()
+            {
+                SelectionStrategy = new SequentialSelectionStrategy(),
+
+                TerminationStrategy = new ApprovalTerminationStrategy()
+                {
+                    // Only the Budget advisor agent may approve.
+                    Agents = [budgetAdvisorAgent],
+                    // Limit total number of turns
+                    MaximumIterations = 15,
+                }
+                    
+            }
+};
+
+
+var userMessage = new ChatMessageContent(AuthorRole.User, 
+    "Quiero planear un viaje a Japón desde Madrid de 10 dias." 
+    + " Mi presupuesto son 900$ para los vuelos, hoteles y actividades.");
+chat.AddChatMessage(userMessage);
+
+// Invoke the chat and display the conversation
+await foreach (var response in chat.InvokeAsync())
+{
+    string authorExpression = response.Role == AuthorRole.User ? string.Empty : $" - {response.AuthorName}";
+    string contentExpression = string.IsNullOrWhiteSpace(response.Content) ? string.Empty : response.Content;
+    Console.WriteLine($"\n# {response.Role}{authorExpression}\n");
+    Console.WriteLine(contentExpression);
+}
+
+Console.WriteLine($"\n[CONVERSATION COMPLETED: {chat.IsComplete}]");
+
+ private sealed class ApprovalTerminationStrategy : TerminationStrategy
+ {
+     // Terminate when the final message contains the term "approve"
+     protected override Task<bool> ShouldAgentTerminateAsync(Agent agent, IReadOnlyList<ChatMessageContent> history, CancellationToken cancellationToken)
+         => Task.FromResult(history[history.Count - 1].Content?.Contains("yes", StringComparison.OrdinalIgnoreCase) ?? false);
+ }
+
+#!markdown
+
+### Hotel recepcionist service: a day plan 🏨🧳
+
+#!csharp
+
+#!import Helpers/JsonResultTranslator.cs
+
+#pragma warning disable SKEXP0110, SKEXP0001, SKEXP0010
+using System.Threading;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.Chat;
+using Microsoft.SemanticKernel.Agents.OpenAI;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+public record OuterTerminationResult(bool isApproved, string reason);
+
+public record AgentSelectionResult(string name, string reason);
+
+var builder = Kernel.CreateBuilder();
+builder.AddAzureOpenAIChatCompletion(
+            modelgpt,
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-service");  
+builder.AddAzureOpenAIChatCompletion(
+            model, 
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-mini-service");  
+
+// Weather Agent
+Kernel weatherAgentKernel = builder.Build();
+
+ChatCompletionAgent weatherAgent =
+    new()
+    {
+        Name = "WeatherAgent",
+        Instructions = "You are an agent designed to query and retrieve information about the weather"
+            + " of a given location. Keep it short and concise such as it's 20 celsious sunny, hot, cold,"
+            + " rainy or cloud with no description. For now, just make it up, you do not have to call any"
+            + " service. Do not tell anything other than the weather.",
+        Kernel = weatherAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-mini-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            })
+    };
+
+    
+// Food Agent     
+Kernel foodAgentKernel = weatherAgentKernel.Clone();
+foodAgentKernel.ImportPluginFromPromptDirectory("Plugins/FoodPlugin");
+
+ChatCompletionAgent foodAgent =
+    new()
+    {
+        Name = "FoodAgent",
+        Instructions = "You are an agent responsible for suggestion of the food depending upon"
+            + " the weather and time of the day. If any feedback is provided by {{{recepcionistAgent.Name}}}"
+            + " then you need to address it. Do not tell anything other than the food. Stick to the activities plan.",
+        Kernel = foodAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-mini-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            })
+    };
+
+
+// Travel Agent to recommend activities and creates an itinerary
+Kernel travelAgentKernel = weatherAgentKernel.Clone();
+
+ChatCompletionAgent travelAgent =
+    new()
+    {
+        Name = "TravelAgent",
+        Instructions = "You are an agent responsible for suggesting activities and creating an itinerary"
+            + " for a given location with respect to the weather. Do not tell anything other than the travel"
+            + " plans. Your travel plans should not be more than 2 activities.",
+        Kernel = travelAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-mini-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            })
+    };
+
+// Concierge Agent to personally review and optimize the plan
+Kernel recepcionistAgentKernel = weatherAgentKernel.Clone();
+
+ChatCompletionAgent recepcionistAgent =
+    new()
+    {
+        Name = "RecepcionistAgent",
+        Instructions = "You are an experienced hotel recepcionist who is responsible for the overall destination experience for the guest. You should:\n" +
+            "1. Review if the activities match the weather conditions. You also need to make sure that you get weather, food and travel plan before approving or rejecting the plan.\n" +
+            "2. Ensure restaurant recommendations align with meal times and weather. If meal does not contain any vegetarian options then reject the plan.\n" +
+            "3. Always provide your feedback but very concise, to the point. No extra chatty words.\n" +
+            "4. You are only allowed to approve with a word approve or else provide your feedback as why it is not approved.",
+        Kernel = recepcionistAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            })
+    };
+
+OpenAIPromptExecutionSettings jsonSettings = new() { 
+    ResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonObjectFormat() 
+};
+
+private string selectionFunctionInstructions =
+$$$"""
+    Determine which participant takes the next turn in a conversation based on the the most recent participant. 
+    State only the name of the participant to take the next turn. 
+    No participant should take more than one turn in a row.
+    
+    Choose only from these participants in the following order:
+    - {{{weatherAgent.Name}}}
+    - {{{foodAgent.Name}}}
+    - {{{travelAgent.Name}}}
+    - {{{recepcionistAgent.Name}}}
+
+    Always follow these rules when selecting the next participant:        
+    After {{{weatherAgent.Name}}} has responded, select the {{{foodAgent.Name}}} agent for the next response.
+    After {{{foodAgent.Name}}} has responded, select the {{{travelAgent.Name}}} agent for the next response.
+    After {{{travelAgent.Name}}} has responded, select the {{{recepcionistAgent.Name}}} agent for the next response.
+
+    Based upon the feedback of RecepcionistAgent's feedback, select the appropriate agent for the response. For example, if the suggestion is for food then it should be the {{{foodAgent.Name}}}.
+
+    Respond in JSON format.  The JSON schema can include only:
+    {
+        "name": "string (the name of the agent selected for the next turn)",
+        "reason": "string (the reason for the participant was selected)"
+    }
+    
+    History:
+    {{$history}}
+""";
+
+KernelFunction selectionFunction = KernelFunctionFactory.CreateFromPrompt(selectionFunctionInstructions, jsonSettings);
+
+private string terminationFunctionInstructions = 
+"""
+    Determine if the travel plan has been approved. Provide the reason of your decision as well.
+
+        Respond in JSON format.  The JSON schema can include only:
+    {
+        "isApproved": "bool (true if the user request has been approved)",
+        "reason": "string (the reason for your determination)"
+    }
+
+    History:
+    {{$history}}
+""";
+KernelFunction terminationFunction = KernelFunctionFactory.CreateFromPrompt(terminationFunctionInstructions, jsonSettings);
+
+// Limit history used for selection and termination to the most recent message.
+ChatHistoryTruncationReducer strategyReducer = new(5);
+
+ // Create a chat for agent interaction.
+ AgentGroupChat chat =
+     new(weatherAgent, foodAgent, travelAgent, recepcionistAgent)
+     {
+         ExecutionSettings =
+             new()
+             {
+                  // KernelFunctionSelectionStrategy selects agents based on a prompt function.
+                  SelectionStrategy =
+                      new KernelFunctionSelectionStrategy(selectionFunction, weatherAgentKernel.Clone())
+                      {
+                          // Always start with the weather agent
+                          InitialAgent = weatherAgent,
+                          // Returns the entire result value as a string.
+                          ResultParser = (result) => 
+                          {
+                           AgentSelectionResult? jsonResult = JsonResultTranslator.Translate<AgentSelectionResult>(result.GetValue<string>());
+                            // print AgentSelectionResult
+                            Console.WriteLine($"\n"+jsonResult);
+                            string? agentName = string.IsNullOrWhiteSpace(jsonResult?.name) ? null : jsonResult?.name;
+                            agentName ??= foodAgent.Name;
+
+                            return agentName;
+                          },
+                          // The prompt variable name for the history argument.
+                          HistoryVariableName = "history",
+                          // Save tokens by not including the entire history in the prompt
+                          HistoryReducer = strategyReducer
+                      },
+                     
+                 // Here KernelFunctionTerminationStrategy will terminate
+                 // when the recepcionist agent has given their approval.
+                 TerminationStrategy =
+                     new KernelFunctionTerminationStrategy(terminationFunction, weatherAgentKernel.Clone())
+                     {
+                         // Only the recepcionist agent may approve.
+                         Agents = [recepcionistAgent],
+                         // Customer result parser to determine if the response is "yes"
+                         ResultParser =
+                        (result) =>
+                        {
+                            OuterTerminationResult? jsonResult = JsonResultTranslator.Translate<OuterTerminationResult>(result.GetValue<string>());
+                            // print OuterTerminationResult
+                            Console.WriteLine($"\n"+jsonResult);
+                            return jsonResult?.isApproved ?? false;
+                        },
+                         // The prompt variable name for the history argument.
+                         HistoryVariableName = "history",
+                         // Limit total number of turns
+                         MaximumIterations = 10,
+                         // Save tokens by not including the entire history in the prompt
+                         HistoryReducer = strategyReducer
+                     },
+             }
+     };
+
+ 
+ ChatMessageContent input = new(AuthorRole.User, 
+    "Estoy planeando pasar el dia en Madrid, ¿puedes ayudarme a planificar el dia?"
+    + " Quiero conocer el tiempo, opciones de comida y actividades que pueda realizar");
+ chat.AddChatMessage(input);
+
+await foreach (ChatMessageContent response in chat.InvokeAsync())
+{
+    string authorExpression = response.Role == AuthorRole.User ? string.Empty : $" - {response.AuthorName}";
+    string contentExpression = string.IsNullOrWhiteSpace(response.Content) ? string.Empty : response.Content;
+    Console.WriteLine($"\n# {response.Role}{authorExpression}\n");
+    Console.WriteLine(contentExpression);
+}
+
+
+
+Console.WriteLine($"\n[IS COMPLETED: {chat.IsComplete}]");
+
+#!markdown
+
+### Hotel recepcionist service: a day plan 🏨🧳 + Foundry AI Agent Service 
+
+#!csharp
+
+#!import Helpers/JsonResultTranslator.cs
+#!import Plugins/Agents/BaseAgent.cs
+#!import Plugins/Agents/WeatherForecastAgent.cs
+#!import Plugins/Agents/TravelAgent.cs
+
+#pragma warning disable SKEXP0110, SKEXP0001, SKEXP0010
+using System;
+using System.ComponentModel;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.OpenAI;
+using Microsoft.SemanticKernel.Agents.Chat;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+
+public record OuterTerminationResult(bool isApproved, string reason);
+
+public record AgentSelectionResult(string name, string reason);
+
+var builder = Kernel.CreateBuilder();
+builder.AddAzureOpenAIChatCompletion(
+            modelgpt,
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-service");  
+builder.AddAzureOpenAIChatCompletion(
+            model, 
+            azureOpenAIEndpoint, 
+            azureOpenAIKey, 
+            "gpt-4o-mini-service");  
+
+// Weather Agent
+Kernel weatherAgentKernel = builder.Build();
+weatherAgentKernel.ImportPluginFromObject(new WeatherForecastAgent());
+
+ChatCompletionAgent weatherAgent =
+    new()
+    {
+        Name = "WeatherAgent",
+        Instructions = "You are an agent designed to query and retrieve information about the weather"
+            + " of a given location. Keep it short and concise such as it's 20 celsious sunny, hot, cold,"
+            + " rainy or cloud with no description. Use a function to retrieve online data."
+            + " Do not tell anything other than the weather. Reply in the same language as the user.",
+        Kernel = weatherAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-mini-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            })
+    };
+
+    
+// Food Agent     
+Kernel foodAgentKernel = weatherAgentKernel.Clone();
+foodAgentKernel.ImportPluginFromPromptDirectory("Plugins/FoodPlugin");
+
+ChatCompletionAgent foodAgent =
+    new()
+    {
+        Name = "FoodAgent",
+        Instructions = "You are an agent responsible for suggestion of the food depending upon"
+            + " the weather and time of the day. If any feedback is provided by {{{recepcionistAgent.Name}}}"
+            + " then you need to address it. Do not tell anything other than the food. Stick to the activities plan.",
+        Kernel = foodAgentKernel,
+        Arguments = new KernelArguments(
+            new OpenAIPromptExecutionSettings() 
+            { 
+               ServiceId = "gpt-4o-mini-service",
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            })
+    };
+
+
+// Travel Agent to recommend activities and creates an itinerary
+Kernel travelAgentKernel = weatherAgentKernel.Clone();
+travelAgentKernel.ImportPluginFromObject(new TravelAgent());
+
+ChatCompletionAgent travelAgent =
+    new()
+    {
+        Name = "TravelAgent",
+        Instructions = "You are an agent responsible for suggesting activities and creating an itinerary"
+            + " for a given location with respect to the weather. Do not tell anything other than the travel"
+            + " plans. Your travel plans should not be more than 2 activities. Reply in the same language as the user.",
+        Kernel = travelAgentKernel,
+        Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings() 
+        { 
+            ServiceId = "gpt-4o-mini-service",
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        })
+    };
+
+// Concierge Agent to personally review and optimize the plan
+Kernel recepcionistAgentKernel = weatherAgentKernel.Clone();
+
+ChatCompletionAgent recepcionistAgent =
+    new()
+    {
+        Name = "RecepcionistAgent",
+        Instructions = "You are an experienced hotel recepcionist who is responsible for the overall destination experience for the guest. You should:\n" +
+            "1. Review if the activities match the weather conditions. You also need to make sure that you get weather, food and travel plan before approving or rejecting the plan.\n" +
+            "2. Ensure restaurant recommendations align with meal times and weather. If meal does not contain any vegetarian options then reject the plan.\n" +
+            "3. Always provide your feedback but very concise, to the point. No extra chatty words.\n" +
+            "4. You are only allowed to approve with a word approve or else provide your feedback as why it is not approved.",
+        Kernel = recepcionistAgentKernel,
+        Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings() 
+        { 
+            ServiceId = "gpt-4o-service",
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        })
+    };
+
+OpenAIPromptExecutionSettings jsonSettings = new() { 
+    ResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonObjectFormat() 
+};
+
+private string selectionFunctionInstructions =
+$$$"""
+    Determine which participant takes the next turn in a conversation based on the the most recent participant. 
+    State only the name of the participant to take the next turn. 
+    No participant should take more than one turn in a row.
+    
+    Choose only from these participants in the following order:
+    - {{{weatherAgent.Name}}}
+    - {{{foodAgent.Name}}}
+    - {{{travelAgent.Name}}}
+    - {{{recepcionistAgent.Name}}}
+
+    Always follow these rules when selecting the next participant:        
+    After {{{weatherAgent.Name}}} has responded, select the {{{foodAgent.Name}}} agent for the next response.
+    After {{{foodAgent.Name}}} has responded, select the {{{travelAgent.Name}}} agent for the next response.
+    After {{{travelAgent.Name}}} has responded, select the {{{recepcionistAgent.Name}}} agent for the next response.
+
+    Based upon the feedback of RecepcionistAgent's feedback, select the appropriate agent for the response. For example, if the suggestion is for food then it should be the {{{foodAgent.Name}}}.
+
+    Respond in JSON format.  The JSON schema can include only:
+    {
+        "name": "string (the name of the agent selected for the next turn)",
+        "reason": "string (the reason for the participant was selected)"
+    }
+    
+    History:
+    {{$history}}
+""";
+
+KernelFunction selectionFunction = KernelFunctionFactory.CreateFromPrompt(selectionFunctionInstructions, jsonSettings);
+
+private string terminationFunctionInstructions = 
+"""
+    Determine if the travel plan has been approved. Provide the reason of your decision as well.
+
+        Respond in JSON format.  The JSON schema can include only:
+    {
+        "isApproved": "bool (true if the user request has been approved)",
+        "reason": "string (the reason for your determination)"
+    }
+
+    History:
+    {{$history}}
+""";
+KernelFunction terminationFunction = KernelFunctionFactory.CreateFromPrompt(terminationFunctionInstructions, jsonSettings);
+
+// Limit history used for selection and termination to the most recent message.
+ChatHistoryTruncationReducer strategyReducer = new(5);
+
+ // Create a chat for agent interaction.
+ AgentGroupChat chat =
+     new(weatherAgent, foodAgent, travelAgent, recepcionistAgent)
+     {
+         ExecutionSettings =
+             new()
+             {
+                  // KernelFunctionSelectionStrategy selects agents based on a prompt function.
+                  SelectionStrategy =
+                      new KernelFunctionSelectionStrategy(selectionFunction, weatherAgentKernel.Clone())
+                      {
+                          // Always start with the weather agent
+                          InitialAgent = weatherAgent,
+                          // Returns the entire result value as a string.
+                          ResultParser = (result) => 
+                          {
+                           AgentSelectionResult? jsonResult = JsonResultTranslator.Translate<AgentSelectionResult>(result.GetValue<string>());
+                            // print AgentSelectionResult
+                            Console.WriteLine($"\n"+jsonResult);
+                            string? agentName = string.IsNullOrWhiteSpace(jsonResult?.name) ? null : jsonResult?.name;
+                            agentName ??= foodAgent.Name;
+
+                            return agentName;
+                          },
+                          // The prompt variable name for the history argument.
+                          HistoryVariableName = "history",
+                          // Save tokens by not including the entire history in the prompt
+                          HistoryReducer = strategyReducer
+                      },
+                     
+                 // Here KernelFunctionTerminationStrategy will terminate
+                 // when the recepcionist agent has given their approval.
+                 TerminationStrategy =
+                     new KernelFunctionTerminationStrategy(terminationFunction, weatherAgentKernel.Clone())
+                     {
+                         // Only the recepcionist agent may approve.
+                         Agents = [recepcionistAgent],
+                         // Customer result parser to determine if the response is "yes"
+                         ResultParser =
+                        (result) =>
+                        {
+                            OuterTerminationResult? jsonResult = JsonResultTranslator.Translate<OuterTerminationResult>(result.GetValue<string>());
+                            // print OuterTerminationResult
+                            Console.WriteLine($"\n"+jsonResult);
+                            return jsonResult?.isApproved ?? false;
+                        },
+                         // The prompt variable name for the history argument.
+                         HistoryVariableName = "history",
+                         // Limit total number of turns
+                         MaximumIterations = 10,
+                         // Save tokens by not including the entire history in the prompt
+                         HistoryReducer = strategyReducer
+                     },
+             }
+     };
+
+ 
+ ChatMessageContent input = new(AuthorRole.User, 
+    "Estoy planeando pasar el dia en Madrid, ¿puedes ayudarme a planificar el dia?"
+    + " Quiero conocer el tiempo, opciones de comida y actividades que pueda realizar");
+ chat.AddChatMessage(input);
+
+await foreach (ChatMessageContent response in chat.InvokeAsync())
+{
+    string authorExpression = response.Role == AuthorRole.User ? string.Empty : $" - {response.AuthorName}";
+    string contentExpression = string.IsNullOrWhiteSpace(response.Content) ? string.Empty : response.Content;
+    Console.WriteLine($"\n# {response.Role}{authorExpression}\n");
+    Console.WriteLine(contentExpression);
+}
+
+
+
+Console.WriteLine($"\n[IS COMPLETED: {chat.IsComplete}]");
