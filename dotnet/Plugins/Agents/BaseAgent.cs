@@ -15,9 +15,6 @@ public abstract class BaseAgent
         var projectClient = new AIProjectClient(connectionString, new DefaultAzureCredential());
         AgentsClient agentClient = projectClient.GetAgentsClient();
 
-        Azure.Response<Azure.AI.Projects.Agent> agentResponse = await agentClient.GetAgentAsync(agentId);
-        Azure.AI.Projects.Agent agent = agentResponse.Value;
-
         // Create thread for communication
         Azure.Response<AgentThread> threadResponse = await agentClient.CreateThreadAsync();
         AgentThread thread = threadResponse.Value;
@@ -28,6 +25,9 @@ public abstract class BaseAgent
             MessageRole.User,
             messageContent);
         ThreadMessage message = messageResponse.Value;
+
+        Azure.Response<Azure.AI.Projects.Agent> agentResponse = await agentClient.GetAgentAsync(agentId);
+        Azure.AI.Projects.Agent agent = agentResponse.Value;
 
         // Run the agent
         Azure.Response<Azure.AI.Projects.ThreadRun> runResponse = await agentClient.CreateRunAsync(thread, agent);

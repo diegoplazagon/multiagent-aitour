@@ -12,11 +12,11 @@
 
 #!csharp
 
-#r "nuget: Microsoft.SemanticKernel, *-*"
-#r "nuget: Microsoft.SemanticKernel.Plugins.Core,*-*"
-#r "nuget: Microsoft.SemanticKernel.Agents.Core, *-*"
-#r "nuget: Microsoft.SemanticKernel.Agents.Abstractions, *-*"
-#r "nuget: Microsoft.SemanticKernel.Agents.OpenAI, *-*"
+#r "nuget: Microsoft.SemanticKernel, 1.42.0-preview"
+#r "nuget: Microsoft.SemanticKernel.Plugins.Core, 1.42.0-preview"
+#r "nuget: Microsoft.SemanticKernel.Agents.Core, 1.42.0-preview"
+#r "nuget: Microsoft.SemanticKernel.Agents.Abstractions, 1.42.0-preview"
+#r "nuget: Microsoft.SemanticKernel.Agents.OpenAI, 1.42.0-preview"
 #r "nuget: Azure.AI.Projects, 1.0.0-beta.2"
 #r "nuget: Azure.Identity, 1.13.1"
 
@@ -176,8 +176,7 @@ var travelPlannerAgent = new ChatCompletionAgent
     Arguments = new KernelArguments(
         new OpenAIPromptExecutionSettings
         {
-            ServiceId = "gpt-4o-mini-service",
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            ServiceId = "gpt-4o-mini-service"
         }
     )
 };
@@ -216,8 +215,7 @@ var travelFeedbackAgent = new ChatCompletionAgent
     Arguments = new KernelArguments(
         new OpenAIPromptExecutionSettings
         {
-            ServiceId = "gpt-4o-service",
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            ServiceId = "gpt-4o-service"
         }
     )
 };
@@ -274,6 +272,7 @@ Console.WriteLine($"\n[CONVERSATION COMPLETED: {chat.IsComplete}]");
 #!import Helpers/JsonResultTranslator.cs
 
 #pragma warning disable SKEXP0110, SKEXP0001, SKEXP0010
+#nullable enable
 using System.Threading;
 using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.Agents.Chat;
@@ -292,7 +291,7 @@ builder.AddAzureOpenAIChatCompletion(
             azureOpenAIKey, 
             "gpt-4o-service");  
 builder.AddAzureOpenAIChatCompletion(
-            model, 
+            modelgptmini, 
             azureOpenAIEndpoint, 
             azureOpenAIKey, 
             "gpt-4o-mini-service");  
@@ -312,9 +311,7 @@ ChatCompletionAgent weatherAgent =
         Arguments = new KernelArguments(
             new OpenAIPromptExecutionSettings() 
             { 
-               ServiceId = "gpt-4o-mini-service",
-               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-            })
+               ServiceId = "gpt-4o-mini-service"            })
     };
 
     
@@ -353,8 +350,7 @@ ChatCompletionAgent travelAgent =
         Arguments = new KernelArguments(
             new OpenAIPromptExecutionSettings() 
             { 
-               ServiceId = "gpt-4o-mini-service",
-               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+               ServiceId = "gpt-4o-mini-service"
             })
     };
 
@@ -541,7 +537,7 @@ builder.AddAzureOpenAIChatCompletion(
             azureOpenAIKey, 
             "gpt-4o-service");  
 builder.AddAzureOpenAIChatCompletion(
-            model, 
+            modelgptmini, 
             azureOpenAIEndpoint, 
             azureOpenAIKey, 
             "gpt-4o-mini-service");  
@@ -569,7 +565,7 @@ ChatCompletionAgent weatherAgent =
 
     
 // Food Agent     
-Kernel foodAgentKernel = weatherAgentKernel.Clone();
+Kernel foodAgentKernel = builder.Build();
 foodAgentKernel.ImportPluginFromPromptDirectory("Plugins/FoodPlugin");
 
 ChatCompletionAgent foodAgent =
@@ -590,7 +586,7 @@ ChatCompletionAgent foodAgent =
 
 
 // Travel Agent to recommend activities and creates an itinerary
-Kernel travelAgentKernel = weatherAgentKernel.Clone();
+Kernel travelAgentKernel = builder.Build();
 travelAgentKernel.ImportPluginFromObject(new TravelAgent());
 
 ChatCompletionAgent travelAgent =
@@ -610,7 +606,7 @@ ChatCompletionAgent travelAgent =
     };
 
 // Concierge Agent to personally review and optimize the plan
-Kernel recepcionistAgentKernel = weatherAgentKernel.Clone();
+Kernel recepcionistAgentKernel = builder.Build();
 
 ChatCompletionAgent recepcionistAgent =
     new()
@@ -692,7 +688,7 @@ ChatHistoryTruncationReducer strategyReducer = new(5);
              {
                   // KernelFunctionSelectionStrategy selects agents based on a prompt function.
                   SelectionStrategy =
-                      new KernelFunctionSelectionStrategy(selectionFunction, weatherAgentKernel.Clone())
+                      new KernelFunctionSelectionStrategy(selectionFunction, builder.Build())
                       {
                           // Always start with the weather agent
                           InitialAgent = weatherAgent,
@@ -716,7 +712,7 @@ ChatHistoryTruncationReducer strategyReducer = new(5);
                  // Here KernelFunctionTerminationStrategy will terminate
                  // when the recepcionist agent has given their approval.
                  TerminationStrategy =
-                     new KernelFunctionTerminationStrategy(terminationFunction, weatherAgentKernel.Clone())
+                     new KernelFunctionTerminationStrategy(terminationFunction, builder.Build())
                      {
                          // Only the recepcionist agent may approve.
                          Agents = [recepcionistAgent],
