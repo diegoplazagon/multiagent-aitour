@@ -38,6 +38,12 @@ Console.WriteLine("Configuration loaded successfully");
 
 ## Create an Agent based on the most simple Kernel
 
+#!markdown
+
+<p align="center">
+    <img src="images/simpleagent.png" alt="Simple agent">
+</p>
+
 #!csharp
 
 #pragma warning disable SKEXP0110, SKEXP0001
@@ -85,6 +91,12 @@ await foreach (ChatMessageContent response in weatherAgent.InvokeAsync(chat))
 #!markdown
 
 ## Agent with a vitamined Kernel 💊💊
+
+#!markdown
+
+<p align="center">
+    <img src="images/agentvitamined.png" alt="Semantic Kernel Agent vitamined">
+</p>
 
 #!csharp
 
@@ -136,6 +148,12 @@ await foreach (ChatMessageContent response in foodAgent.InvokeAsync(chat))
 #!markdown
 
 ### Tour Planner 🧳✈️
+
+#!markdown
+
+<p align="center">
+    <img src="images/teamofagentseq.png" alt="Semantic Kernel sequential orchestration">
+</p>
 
 #!csharp
 
@@ -266,6 +284,12 @@ Console.WriteLine($"\n[CONVERSATION COMPLETED: {chat.IsComplete}]");
 #!markdown
 
 ### Hotel recepcionist service: a day plan 🏨🧳
+
+#!markdown
+
+<p align="center">
+    <img src="images/teamofagentscustom.png" alt="Semantic Kernel Agent orchestration custom">
+</p>
 
 #!csharp
 
@@ -505,6 +529,12 @@ Console.WriteLine($"\n[IS COMPLETED: {chat.IsComplete}]");
 #!markdown
 
 ### Hotel recepcionist service: a day plan 🏨🧳 + Foundry AI Agent Service 
+
+#!markdown
+
+<p align="center">
+    <img src="images/teamofagentsfoundry.png" alt="alt text">
+</p>
 
 #!csharp
 
