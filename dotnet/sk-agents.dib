@@ -38,6 +38,12 @@ Console.WriteLine("Configuration loaded successfully");
 
 ## Create an Agent based on the most simple Kernel
 
+#!markdown
+
+<p align="center">
+    <img src="images/simpleagent.png" alt="Simple agent">
+</p>
+
 #!csharp
 
 #pragma warning disable SKEXP0110, SKEXP0001
@@ -85,6 +91,12 @@ await foreach (ChatMessageContent response in weatherAgent.InvokeAsync(chat))
 #!markdown
 
 ## Agent with a vitamined Kernel 💊💊
+
+#!markdown
+
+<p align="center">
+    <img src="images/agentvitamined.png" alt="Semantic Kernel Agent vitamined">
+</p>
 
 #!csharp
 
@@ -136,6 +148,12 @@ await foreach (ChatMessageContent response in foodAgent.InvokeAsync(chat))
 #!markdown
 
 ### Tour Planner 🧳✈️
+
+#!markdown
+
+<p align="center">
+    <img src="images/teamofagentseq.png" alt="Semantic Kernel sequential orchestration">
+</p>
 
 #!csharp
 
@@ -267,6 +285,12 @@ Console.WriteLine($"\n[CONVERSATION COMPLETED: {chat.IsComplete}]");
 
 ### Hotel recepcionist service: a day plan 🏨🧳
 
+#!markdown
+
+<p align="center">
+    <img src="images/teamofagentscustom.png" alt="Semantic Kernel Agent orchestration custom">
+</p>
+
 #!csharp
 
 #!import Helpers/JsonResultTranslator.cs
@@ -363,7 +387,7 @@ ChatCompletionAgent recepcionistAgent =
         Name = "RecepcionistAgent",
         Instructions = "You are an experienced hotel recepcionist who is responsible for the overall destination experience for the guest. You should:\n" +
             "1. Review if the activities match the weather conditions. You also need to make sure that you get weather, food and travel plan before approving or rejecting the plan.\n" +
-            "2. Ensure restaurant recommendations align with meal times and weather. If meal does not contain any vegetarian options then reject the plan.\n" +
+            "2. Ensure restaurant recommendations align with meal times and weather. Proposed meal must have a vegetarian options. It not, reject the plan" +
             "3. Always provide your feedback but very concise, to the point. No extra chatty words.\n" +
             "4. You are only allowed to approve with a word approve or else provide your feedback as why it is not approved.",
         Kernel = recepcionistAgentKernel,
@@ -396,7 +420,8 @@ $$$"""
     After {{{foodAgent.Name}}} has responded, select the {{{travelAgent.Name}}} agent for the next response.
     After {{{travelAgent.Name}}} has responded, select the {{{recepcionistAgent.Name}}} agent for the next response.
 
-    Based upon the feedback of RecepcionistAgent's feedback, select the appropriate agent for the response. For example, if the suggestion is for food then it should be the {{{foodAgent.Name}}}.
+    Based upon the feedback of RecepcionistAgent's feedback, select the appropriate agent for the response. 
+    For example, if the suggestion is for food then it should be the {{{foodAgent.Name}}}.
 
     Respond in JSON format.  The JSON schema can include only:
     {
@@ -506,6 +531,12 @@ Console.WriteLine($"\n[IS COMPLETED: {chat.IsComplete}]");
 
 ### Hotel recepcionist service: a day plan 🏨🧳 + Foundry AI Agent Service 
 
+#!markdown
+
+<p align="center">
+    <img src="images/teamofagentsfoundry.png" alt="alt text">
+</p>
+
 #!csharp
 
 #!import Helpers/JsonResultTranslator.cs
@@ -552,14 +583,14 @@ ChatCompletionAgent weatherAgent =
         Name = "WeatherAgent",
         Instructions = "You are an agent designed to query and retrieve information about the weather"
             + " of a given location. Keep it short and concise such as it's 20 celsious sunny, hot, cold,"
-            + " rainy or cloud with no description. Use a function to retrieve online data."
-            + " Do not tell anything other than the weather. Reply in the same language as the user.",
+            + " rainy or cloud with no description. Do not tell anything than the weather."
+            + " Reply in the same language as the user.",
         Kernel = weatherAgentKernel,
         Arguments = new KernelArguments(
             new OpenAIPromptExecutionSettings() 
             { 
                ServiceId = "gpt-4o-mini-service",
-               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Required()
             })
     };
 
@@ -595,14 +626,14 @@ ChatCompletionAgent travelAgent =
         Name = "TravelAgent",
         Instructions = "You are an agent responsible for suggesting activities and creating an itinerary"
             + " for a given location with respect to the weather. Do not tell anything other than the travel"
-            + " plans. Your travel plans should not be more than 2 activities. Use a function to retrieve online data."
+            + " plans. Your travel plans should not be more than 2 activities."
             + " Reply in the same language as the user.",
         Kernel = travelAgentKernel,
         Arguments = new KernelArguments(
         new OpenAIPromptExecutionSettings() 
         { 
             ServiceId = "gpt-4o-mini-service",
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Required()
         })
     };
 
@@ -615,7 +646,7 @@ ChatCompletionAgent recepcionistAgent =
         Name = "RecepcionistAgent",
         Instructions = "You are an experienced hotel recepcionist who is responsible for the overall destination experience for the guest. You should:\n" +
             "1. Review if the activities match the weather conditions. You also need to make sure that you get weather, food and travel plan before approving or rejecting the plan.\n" +
-            "2. Ensure restaurant recommendations align with meal times and weather. If meal does not contain any vegetarian options then reject the plan.\n" +
+            "2. Ensure restaurant recommendations align with meal times and weather. Proposed meal must have a vegetarian options. It not, reject the plan.\n" +
             "3. Always provide your feedback but very concise, to the point. No extra chatty words.\n" +
             "4. You are only allowed to approve with a word approve or else provide your feedback as why it is not approved.",
         Kernel = recepcionistAgentKernel,
