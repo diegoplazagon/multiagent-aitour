@@ -552,14 +552,14 @@ ChatCompletionAgent weatherAgent =
         Name = "WeatherAgent",
         Instructions = "You are an agent designed to query and retrieve information about the weather"
             + " of a given location. Keep it short and concise such as it's 20 celsious sunny, hot, cold,"
-            + " rainy or cloud with no description. Use a function to retrieve online data."
-            + " Do not tell anything other than the weather. Reply in the same language as the user.",
+            + " rainy or cloud with no description. Do not tell anything than the weather."
+            + " Reply in the same language as the user.",
         Kernel = weatherAgentKernel,
         Arguments = new KernelArguments(
             new OpenAIPromptExecutionSettings() 
             { 
                ServiceId = "gpt-4o-mini-service",
-               FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+               FunctionChoiceBehavior = FunctionChoiceBehavior.Required()
             })
     };
 
@@ -595,14 +595,14 @@ ChatCompletionAgent travelAgent =
         Name = "TravelAgent",
         Instructions = "You are an agent responsible for suggesting activities and creating an itinerary"
             + " for a given location with respect to the weather. Do not tell anything other than the travel"
-            + " plans. Your travel plans should not be more than 2 activities. Use a function to retrieve online data."
+            + " plans. Your travel plans should not be more than 2 activities."
             + " Reply in the same language as the user.",
         Kernel = travelAgentKernel,
         Arguments = new KernelArguments(
         new OpenAIPromptExecutionSettings() 
         { 
             ServiceId = "gpt-4o-mini-service",
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Required()
         })
     };
 
