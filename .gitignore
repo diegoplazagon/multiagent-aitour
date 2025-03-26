@@ -1,3 +1,9 @@
 dotnet/settings.json
 OUTPUT.md
 SCRIPT.md
+/.vs
+/BookingAPI/.vs
+/BookingAPI/BookingAPI/bin
+/BookingAPI/BookingAPI/obj
+/BookingAPI/BookingAPI/Properties/PublishProfiles
+*.user
